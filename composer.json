@@ -1,0 +1,27 @@
+{
+  "minimum-stability": "dev",
+  "prefer-stable": true,
+  "name": "runetsoft/phpexceladdon",
+  "type": "library",
+  "description": "phpExcel template addon",
+  "keywords": [
+    "project"
+  ],
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "Ksnk 4 RuNetSoft",
+      "email": "sergekoriakin@gmail.com",
+      "homepage": "https://github.com/ksnk"
+    }
+  ],
+
+  "autoload": {
+    "psr-4": {
+      "Ksnk\\phpExcelAddon\\": "src/"
+    }
+  },
+  "require": {
+    "phpoffice/phpspreadsheet": "^1.6"
+  }
+}
