@@ -16,16 +16,23 @@ class templater
     var $ops_prio = [
         '(' => 0,
         ')' => -1000,
-        '+' => 5,
-        '-' => 5,
-        '*' => 6,
-        '**' => 7,
-        '/' => 6,
+        '+' => 6,
+        '-' => 6,
+        '>' => 5,
+        '<' => 5,
+        '>=' => 5,
+        '<=' => 5,
+        '==' => 5,
+        '=' => 1,
+        ';' => 1,
+        '*' => 7,
+        '**' => 8,
+        '/' => 7,
         '.' => 10,
         ',' => 3,
         '|' => 4,
-        '[' => 1,
-        ']' => 1,
+        '[' => 2,
+        ']' => 2,
         'for' => 1,
         'endfor' => 1,
         'as' => 2,
@@ -80,7 +87,7 @@ class templater
             else
                 $mop[]=preg_quote($k,'/');
         }
-        $mode='';
+        $commamode='';
         $place = true; // 1 - операнд  - 0 оператор
         $isfilter = false;//Часть фильтра?
         $reg='/\s*(?:'
@@ -98,7 +105,7 @@ class templater
             } elseif (!empty($m[2][0])) {
                 if($m[2][0]=='for') {
                     $this->pushop('for');
-                    $mode='for';
+                    $commamode='id';
                     $place = false;
                 } else
                     $this->pushop($m[2][0]);
@@ -154,7 +161,7 @@ class templater
             return 1;
         };
         $ops = [];
-        $result = $this->calculate(function ($op, &$param, $eval) use (&$condition, $_prio, &$ops,$mode) {
+        $result = $this->calculate(function ($op, &$param, $eval) use (&$condition, $_prio, &$ops,$commamode,$posX,$pos) {
             $currentPrio = $_prio($op);
             while (count($ops) > 0 && $ops[0] != '(' && $op != '(' && $currentPrio <= $_prio($ops[0])) {
                 //$exec(array_shift($ops), $result, $eval);
@@ -165,13 +172,14 @@ class templater
                             //
                             $a = $eval(array_shift($param), 'id');
                             $b = &$param[0];
-                            if($b[1]==','){
-                                unset($b);array_shift($param);
+                            if ($b[1] == ',') {
+                                unset($b);
+                                array_shift($param);
                                 $b = &$param[0];
                                 $b = $eval($b, 'id');
                                 $b[1] = $this->makearray($b[1], $a[1]);
                             } else {
-                                array_unshift($param,$a);
+                                array_unshift($param, $a);
                             }
                             unset($b);
                         } else {
@@ -180,7 +188,7 @@ class templater
                         }
                         break;
                     case 'for': // начало цикла
-                        $a='';
+                        $a = '';
                         if (count($param) > 1) {
                             //
                             $b = $eval(array_shift($param), 'id');
@@ -189,37 +197,47 @@ class templater
                         } elseif (count($param) == 1) {
                             //
                             $a = $eval(array_shift($param), 'id');
-                            $items = $a[0];
+                            $items = $a[1];
                         }
-                        if(is_array($a[1]))
-                            $name = implode('.',$a[1]);
-                        else
-                            $name = $a;
-
-                        $v =& $this->findByName($a[1]);
+                        if (is_array($items)){
+                            $name = $items[1];
+                            $key=$items[0];
+                        } else {
+                            $name = $items;
+                            $key='_index';
+                        }
                         if (!isset($this->scoups[$name])) {
-                            $this->addScope($name, [
-                                '_index' => 0, '_length' => count($v), '_data' => &$v[0]
-                            ]);
-                            $this->newCircle = count($v);
+                            $data=[];
+                            $data['_loop']=& $this->findByName($a[1]);
+                            reset($data['_loop']);
+                            $data[$name]=current($data['_loop']);
+                            $data[$key]=key($data['_loop']);
+                            $data['_position']=[$pos,$posX];
+                            $data['_index']=1;
+                            $data['_key']=$key;
+                            $this->addScope($name, $data);
                         }
                         break;
                     case 'endfor': // конец цикла
                         $name = $this->scoupNames[0];
-                        $v =& $this->findByName($name, 1);
                         $scoup =& $this->scoups[$name];
                         $scoup['_index']++;
-                        if ($scoup['_index'] >= $scoup['_length']) {
+                        if(false===next($scoup['_loop'])){
                             $this->removeScope($name);
                         } else {
-                            $scoup['_data'] =& $v[$scoup['_index']];
+                            $scoup[$name]=current($scoup['_loop']);
+                            $key=$data['_key'];
+                            $scoup[$key]=key($scoup['_loop']);
+                            $this->goto($scoup['_position'][0],$scoup['_position'][1]);
                         }
+                        break;
+                    case ';': // 2 параметра берем и делаем из них массив
                         break;
                     case ',': // 2 параметра берем и делаем из них массив
                         $a = array_shift($param);
                         $b = &$param[0];
-                        $b = $eval($b,$mode=='for'?'id':'');
-                        $a = $eval($a,$mode=='for'?'id':'');
+                        $b = $eval($b,$commamode);
+                        $a = $eval($a,$commamode);
                         $b[1] = $this->makearray($b[1], $a[1]);
                         unset($b);
                         break;
@@ -229,30 +247,6 @@ class templater
                         $b = $eval($b, 'id');
                         $a = $eval($a, 'id');
                         $b[1] = $this->makearray($b[1], $a[1]);
-                        unset($b);
-                        break;
-                    case '+': // 2 параметра берем и делаем из них массив
-                        $a = array_shift($param);
-                        $b = &$param[0];
-                        $b = $eval($b);
-                        $a = $eval($a);
-                        $b[1] = $a[1]+$b[1];
-                        unset($b);
-                        break;
-                    case '-': // 2 параметра берем и делаем из них массив
-                        $a = array_shift($param);
-                        $b = &$param[0];
-                        $b = $eval($b);
-                        $a = $eval($a);
-                        $b[1] = $b[1]-$a[1];
-                        unset($b);
-                        break;
-                    case '/': // 2 параметра берем и делаем из них массив
-                        $a = array_shift($param);
-                        $b = &$param[0];
-                        $b = $eval($b);
-                        $a = $eval($a);
-                        $b[1] = $b[1]/$a[1];
                         unset($b);
                         break;
                     case ']':
@@ -293,6 +287,24 @@ class templater
                         $param[0] = $this->_call($a[1], $this->makearray($b[1], $p));
                         break;
                     default:
+                        if(isset($this->ops_prio[$_op])){
+                            $a = array_shift($param);
+                            $b = &$param[0];
+                            $b = $eval($b);
+                            $a = $eval($a);
+                            switch($_op) {
+                                case '-': $b[1] = $b[1]-$a[1]; break;
+                                case '+': $b[1] = $b[1]+$a[1]; break;
+                                case '/': $b[1] = $b[1]/$a[1]; break;
+                                case '**': $b[1] = $b[1]**$a[1]; break;
+                                case '>': $b[1] = $b[1]>$a[1]; break;
+                                case '<': $b[1] = $b[1]<$a[1]; break;
+                                case '>=': $b[1] = $b[1]>=$a[1]; break;
+                                case '<=': $b[1] = $b[1]<=$a[1]; break;
+                                case '==': $b[1] = $b[1]==$a[1]; break;
+                            }
+                            unset($b);
+                        } else
                         if (count($param) > 1) {
                             $a = array_shift($param);
                             if ($a[0] != 2) $a = [$a];

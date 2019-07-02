@@ -87,7 +87,7 @@ class filterClass
      * @param $num
      * @return string
      */
-    function num2str($num)
+    function num2str($num, $mode='rub')
     {
         $nul = 'ноль';
         $ten = array(
@@ -118,11 +118,13 @@ class filterClass
                 if ($i2 > 1) $out[] = $tens[$i2] . ' ' . $ten[$gender][$i3]; # 20-99
                 else $out[] = $i2 > 0 ? $a20[$i3] : $ten[$gender][$i3]; # 10-19 | 1-9
                 // units without rub & kop
-                if ($uk > 1) $out[] = self::morph($v, $unit[$uk][0], $unit[$uk][1], $unit[$uk][2]);
+                if ($uk > 1) $out[] = $this->morph($v, $unit[$uk][0], $unit[$uk][1], $unit[$uk][2]);
             } //foreach
         } else $out[] = $nul;
-        $out[] = self::morph(intval($rub), $unit[1][0], $unit[1][1], $unit[1][2]); // rub
-        $out[] = $kop . ' ' . self::morph($kop, $unit[0][0], $unit[0][1], $unit[0][2]); // kop
+        if ($mode == 'rub') {
+            $out[] = $this->morph(intval($rub), $unit[1][0], $unit[1][1], $unit[1][2]); // rub
+            $out[] = $kop . ' ' . $this->morph($kop, $unit[0][0], $unit[0][1], $unit[0][2]); // kop
+        }
         return trim(preg_replace('/ {2,}/', ' ', join(' ', $out)));
     }
 
