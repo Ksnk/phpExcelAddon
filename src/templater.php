@@ -226,7 +226,7 @@ class templater
                             $this->removeScope($name);
                         } else {
                             $scoup[$name]=current($scoup['_loop']);
-                            $key=$data['_key'];
+                            $key=$scoup['_key'];
                             $scoup[$key]=key($scoup['_loop']);
                             $this->goto($scoup['_position'][0],$scoup['_position'][1]);
                         }
