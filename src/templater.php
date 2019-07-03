@@ -298,7 +298,11 @@ class templater
                         }
                         break;
                     case 'endfor': // конец цикла
-                        $name = $this->scoupNames[0];
+                        if(isset($this->scoupNames[0])) {
+                            $name = $this->scoupNames[0];
+                        } else {
+                            $name = $this->scoupNames[0];
+                        }
                         $scoup =& $this->scoups[$name];
                         $scoup['_index']++;
                         if (false===next($scoup['_loop'])) {
@@ -543,7 +547,7 @@ class templater
 
     private function removeScope($name)
     {
-        $this->scoupNames = array_diff($this->scoupNames, [$name]);
+        $this->scoupNames = array_values(array_diff($this->scoupNames, [$name]));
         unset($this->scoups[$name]);
     }
 
