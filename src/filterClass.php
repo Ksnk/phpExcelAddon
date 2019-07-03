@@ -3,11 +3,8 @@
 namespace Ksnk\phpExcelAddon;
 
 /**
- * Еще один шаблонизатор без логики, но с циклами.
- * Для Excel, наверное, тоже подойдет
- * User: Ksnk
- * Date: 15.12.15
- * Time: 1:54
+ * Набор фильтров для templater
+ * Start Date: 15.12.15
  */
 
 class filterClass
@@ -44,7 +41,7 @@ class filterClass
     }
 
     /**
-     * Вывести цену кошерненько с пробелами и рублями, без преносов...
+     * Вывести цену кошерненько с пробелами и рублями...
      * @param $val
      * @param string $suf
      * @return mixed
@@ -55,7 +52,7 @@ class filterClass
     }
 
     /**
-     * Вывести цену кошерненько с пробелами и рублями, без преносов...
+     * Вывести фразу без преносов...
      * @param $val
      * @return mixed
      */
@@ -65,7 +62,7 @@ class filterClass
     }
 
     /**
-     * Злые локализаторы завсегда юзера обидеть норовят, склонений не знают
+     * Злые локализаторы завсегда юзера обидеть норовят, склонениеф не знают
      * @param $date
      * @return string
      */
@@ -85,6 +82,7 @@ class filterClass
     /**
      * num2str - стырено с хабра. Долгой жизни товарищу runcore
      * @param $num
+     * @param string $mode
      * @return string
      */
     function num2str($num, $mode='rub')

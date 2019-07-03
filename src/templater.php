@@ -11,7 +11,6 @@ class templater
     var $scoups = [];
     var $scoupNames = [];
     var $class = 's_func';
-    var $newCircle = false;
 
     var $ops_prio = [
         '(' => 0,
@@ -28,7 +27,7 @@ class templater
         '*' => 7,
         '**' => 8,
         '/' => 7,
-        '.' => 10,
+        '.' => 9,
         ',' => 3,
         '|' => 4,
         '[' => 2,
@@ -37,6 +36,10 @@ class templater
         'for' => 1,
         'endfor' => 1,
         'as' => 2,
+        'if' => 1,
+        'else' => 1,
+        'elseif' => 1,
+        'endif' => 1,
     ];
 
     var $unop=[
@@ -52,9 +55,16 @@ class templater
 
     private
         /** временный результат парсинга конструкции */
-        $conditions;
+        $conditions=[],
+        $cid=0;
 
-    function __construct(&$data = null, $class='')
+    /**
+     * templater constructor.
+     * @param null $data
+     * @param string $class
+     * @param callable $handler
+     */
+    function __construct(&$data = null, $class='', $handler = null)
     {
         $this->addScope('', ['_data' => &$data]);
         if(!empty($class) && class_exists($class)) {
@@ -79,17 +89,11 @@ class templater
      * @return bool|mixed
      * @throws \Exception
      */
-    public function parce($line, &$posX = null)
+    public function parce($line, $posX = null)
     {
         // лексический разбор
         $pos = 0;
-        if (is_null($posX)) {
-            $pos = 0;
-            $this->conditions = [];
-        }
-        if (is_array($posX)) {
-            $pos = $posX[0];
-        }
+
         $this->pushop('(');
         // однобуквенные знаки препинания
         $opr='';$mop=[];$uop='';
@@ -140,6 +144,8 @@ class templater
                         $this->pushop('endfor');
                     } else if ($m[3][0] == ')') {
                         $this->pushop(')');
+                    } else if ($m[3][0] == '(') {
+                        $this->pushop('(');
                     } else {
                         $this->pushoperand($m[3][0], 'call');
                     }
@@ -180,7 +186,7 @@ class templater
 
         // синтаксический разбор + калькуляция
         $ops = [];
-        $result = $this->calculate(function ($op, &$param, $eval, &$id) use (&$condition, &$ops,$commamode,$posX,$pos, &$echo_result) {
+        $result = $this->calculate(function ($op, &$param, $eval, &$id) use (&$condition, &$ops,$commamode,$posX, &$echo_result, $pos) {
             $currentPrio = $op[2];
             while (count($ops) > 0 && $ops[0][1] != '(' && $op[1] != '(' && ($currentPrio < $ops[0][2]
                     || ($currentPrio == $ops[0][2] && $currentPrio<10) // финт ушами для обхода унарных операций
@@ -255,6 +261,18 @@ class templater
                         }
                         break;
                     case ';': // 2 параметра берем и делаем из них массив
+                        //  сбросить стек операций до скобки
+                        while (count($ops)>0 && $ops[0][1]!='(') array_shift($ops);
+                        if(count($ops)==0) {
+                            $this->error('int: забыта открывающая скобка');
+                        } else {
+                            $cnt = $ops[0][4];
+                            if ($cnt < count($param) - 1) {
+                                $a = array_shift($param);
+                                while (count($param) > $cnt) array_shift($param);
+                                array_unshift($param, $a);
+                            }
+                        }
                         break;
                     case ',': // 2 параметра берем и делаем из них массив
                         $a = array_shift($param);
@@ -357,6 +375,9 @@ class templater
             if ($op[1] == ')') {
                 array_shift($ops); // asset =='('
             } else {
+                if ($op[1] == '(') {
+                    $op[4] = count($param);
+                }
                 array_unshift($ops, $op);
             }
         }, function ($a, $type = '') {
@@ -414,16 +435,15 @@ class templater
             return $op;
         };
         if (!empty($this->conditions)) {
-            $id=0;
             $result = [];
-            while($id<count($this->conditions)){
-                $cond=$this->conditions[$id];
+            while($this->cid<count($this->conditions)){
+                $cond=$this->conditions[$this->cid];
                 if ($cond[0] === 0) {
-                    $exec($cond, $result, $eval, $id);
+                    $exec($cond, $result, $eval, $this->cid);
                 } else {
                     array_unshift($result, $cond);
                 }
-                $id++;
+                $this->cid++;
             }
             while (count($result) > 1) {
                 $eval(array_pop($result));
