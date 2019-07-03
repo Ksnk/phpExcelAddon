@@ -33,13 +33,13 @@ class templater
         '[' => 2,
         ']' => 2,
         '~' => 1,
-        'for' => 1,
-        'endfor' => 1,
+        'for' => 0,
+        'endfor' => 0,
         'as' => 2,
-        'if' => 1,
-        'else' => 1,
-        'elseif' => 1,
-        'endif' => 1,
+        'if' => 0,
+        'else' => 0,
+        'elseif' => 0,
+        'endif' => 0,
     ];
 
     var $unop=[
@@ -47,14 +47,11 @@ class templater
         '~'=>1,
     ];
 
-    var $automate=[
-        'for'=>[],
-        'if'=>[],
-        'usual'=>[]
-    ];
+    var $mode='',
+        $skip=[];
 
     private
-        /** временный результат парсинга конструкции */
+        /** набор лексем после парсинга */
         $conditions=[],
         $cid=0;
 
@@ -96,28 +93,33 @@ class templater
 
         $this->pushop('(');
         // однобуквенные знаки препинания
-        $opr='';$mop=[];$uop='';
-        foreach($this->ops_prio as $k=>$v){
-            if(strlen($k)==1)
-                $opr.=$k;
-            else
-                $mop[]=preg_quote($k,'/');
+        static $reg;
+        if(!isset($reg)) {
+            $opr = '';
+            $mop = [];
+            $uop = '';
+            foreach ($this->ops_prio as $k => $v) {
+                if (strlen($k) == 1)
+                    $opr .= $k;
+                else
+                    $mop[] = preg_quote($k, '/');
+            }
+            foreach ($this->unop as $k => $v) {
+                if (strlen($k) == 1)
+                    $uop .= $k;
+            }
+            $reg = '/\s*(?:'
+                . '([' . preg_quote($uop, '/') . '])' // 1
+                . '|(' . implode('|', $mop) . ')' // 2
+                . '|([' . preg_quote($opr, '/') . '])' // 3
+                . '|(["\'])((?:[^\\4\\\\]|\\\\.)*?)\\4'  //4,5
+                . '|(\d\w*)' //6
+                . '|(\w+)\s*(\(|)' //7,8
+                . ')()/';
         }
-        foreach($this->unop as $k=>$v){
-            if(strlen($k)==1)
-                $uop.=$k;
-        }
-        $commamode='';
+        $commamode = '';
         $place = true; // 1 - операнд  - 0 оператор
         $isfilter = false;//Часть фильтра?
-        $reg='/\s*(?:'
-            . '([' . preg_quote($uop,'/') . '])' // 1
-            . '|(' . implode('|',$mop) . ')' // 2
-            . '|([' . preg_quote($opr,'/') . '])' // 3
-            . '|(["\'])((?:[^\\4\\\\]|\\\\.)*?)\\4'  //4,5
-            . '|(\d\w*)' //6
-            . '|(\w+)\s*(\(|)' //7,8
-            . ')()/';
         while (preg_match($reg,$line, $m, PREG_OFFSET_CAPTURE, $pos)) {
             $pos = $m[9][1];
             if (!empty($m[1][0])) {
@@ -133,6 +135,15 @@ class templater
                     $this->pushop('for');
                     $commamode='id';
                     $place = false;
+                } elseif($m[2][0]=='if') {
+                    $this->pushop('if');
+                    $place = false;
+                } elseif($m[2][0]=='elseif') {
+                    $this->pushop('elseif');
+                    $place = false;
+                } elseif($m[2][0]=='else') {
+                    $this->pushop('else');
+                    $place = false;
                 } else
                     $this->pushop($m[2][0]);
             } elseif (!empty($m[3][0])) {
@@ -142,6 +153,8 @@ class templater
                         $this->pushop('for');
                     } else if ($m[3][0] == ']') {
                         $this->pushop('endfor');
+                    } else if ($m[3][0] == ';') {
+                        $this->pushop(';');
                     } else if ($m[3][0] == ')') {
                         $this->pushop(')');
                     } else if ($m[3][0] == '(') {
@@ -187,6 +200,16 @@ class templater
         // синтаксический разбор + калькуляция
         $ops = [];
         $result = $this->calculate(function ($op, &$param, $eval, &$id) use (&$condition, &$ops,$commamode,$posX, &$echo_result, $pos) {
+            if($this->mode=='inactive'){
+                if(!in_array($op[1],$this->skip[0][0])) {
+                    return ;
+                } else {
+                    $x=array_shift($this->skip);
+                    $this->mode=$x[1];
+                    if($this->mode=='inactive')
+                        return;
+                }
+            }
             $currentPrio = $op[2];
             while (count($ops) > 0 && $ops[0][1] != '(' && $op[1] != '(' && ($currentPrio < $ops[0][2]
                     || ($currentPrio == $ops[0][2] && $currentPrio<10) // финт ушами для обхода унарных операций
@@ -194,6 +217,34 @@ class templater
                 //$exec(array_shift($ops), $result, $eval);
                 $_op = array_shift($ops)[1];
                 switch ($_op) {
+                    case 'if':
+                        $a=$eval(array_shift($param));
+                        $data=['_data'=>[]];
+                        $data['_if']=$a;
+                        $data['_position']=[$pos,$posX];
+                        $this->addScope('if', $data);
+                        if(!$a){
+                            array_unshift($this->skip,[['endif','else','elseif'],$this->mode]);
+                            $data=['_data'=>[]];
+                            $data['_if']=$a;
+                            $data['_position']=[$pos,$posX];
+                            $this->addScope('if', $data);
+                        }
+                        break;
+                    case 'endif':
+                        $a=$eval(array_shift($param));
+                        $data=['_data'=>[]];
+                        $data['_if']=$a;
+                        $data['_position']=[$pos,$posX];
+                        $this->addScope('if', $data);
+                        if(!$a){
+                            array_unshift($this->skip,[['endif','else','elseif'],$this->mode]);
+                            $data=['_data'=>[]];
+                            $data['_if']=$a;
+                            $data['_position']=[$pos,$posX];
+                            $this->addScope('if', $data);
+                        }
+                        break;
                     case 'as':
                         if (count($param) > 1) {
                             //
@@ -250,7 +301,7 @@ class templater
                         $name = $this->scoupNames[0];
                         $scoup =& $this->scoups[$name];
                         $scoup['_index']++;
-                        if(false===next($scoup['_loop'])){
+                        if (false===next($scoup['_loop'])) {
                             $this->removeScope($name);
                         } else {
                             $scoup['_data'][$name]=current($scoup['_loop']);
@@ -263,9 +314,7 @@ class templater
                     case ';': // 2 параметра берем и делаем из них массив
                         //  сбросить стек операций до скобки
                         while (count($ops)>0 && $ops[0][1]!='(') array_shift($ops);
-                        if(count($ops)==0) {
-                            $this->error('int: забыта открывающая скобка');
-                        } else {
+                        if (count($ops)>0) {
                             $cnt = $ops[0][4];
                             if ($cnt < count($param) - 1) {
                                 $a = array_shift($param);
