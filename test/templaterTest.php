@@ -52,7 +52,11 @@ class templaterTest extends PHPUnit_Framework_TestCase
     {
         $data = ['hello' => [33], 'item' => [1, 2, 3, 4, 5]];
         $templater = new templater($data, '\Ksnk\phpExcelAddon\filterClass');
-        $this->assertEquals('33:1 33:2 33:3 33:4 33:5 ', $templater->parce('for item as k,i; for hello; ~hello ;endfor;~":";~i;~" "; endfor'));
+        $this->assertEquals('33:1 33:2 33:3 33:4 33:5 ',
+            $templater->parce('for item as k,i; for hello;').
+            $templater->parce('~hello',[11,2]).
+            $templater->parce(';endfor;~":";~i;~" "; endfor')
+        );
     }
 
     /**

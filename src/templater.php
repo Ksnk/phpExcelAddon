@@ -90,6 +90,7 @@ class templater
     {
         // лексический разбор
         $pos = 0;
+        $this->_posx=$posX;
 
         $this->pushop('(');
         // однобуквенные знаки препинания
@@ -199,7 +200,7 @@ class templater
 
         // синтаксический разбор + калькуляция
         $ops = [];
-        $result = $this->calculate(function ($op, &$param, $eval, &$id) use (&$condition, &$ops,$commamode,$posX, &$echo_result, $pos) {
+        $result = $this->calculate(function ($op, &$param, $eval, &$id) use (&$condition, &$ops,$commamode, &$echo_result) {
             if($this->mode=='inactive'){
                 if(!in_array($op[1],$this->skip[0][0])) {
                     return ;
@@ -215,19 +216,17 @@ class templater
                     || ($currentPrio == $ops[0][2] && $currentPrio<10) // финт ушами для обхода унарных операций
                 )) {
                 //$exec(array_shift($ops), $result, $eval);
-                $_op = array_shift($ops)[1];
-                switch ($_op) {
+                $_op = array_shift($ops);
+                switch ($_op[1]) {
                     case 'if':
                         $a=$eval(array_shift($param));
                         $data=['_data'=>[]];
                         $data['_if']=$a;
-                        $data['_position']=[$pos,$posX];
                         $this->addScope('if', $data);
                         if(!$a){
                             array_unshift($this->skip,[['endif','else','elseif'],$this->mode]);
                             $data=['_data'=>[]];
                             $data['_if']=$a;
-                            $data['_position']=[$pos,$posX];
                             $this->addScope('if', $data);
                         }
                         break;
@@ -235,13 +234,11 @@ class templater
                         $a=$eval(array_shift($param));
                         $data=['_data'=>[]];
                         $data['_if']=$a;
-                        $data['_position']=[$pos,$posX];
                         $this->addScope('if', $data);
                         if(!$a){
                             array_unshift($this->skip,[['endif','else','elseif'],$this->mode]);
                             $data=['_data'=>[]];
                             $data['_if']=$a;
-                            $data['_position']=[$pos,$posX];
                             $this->addScope('if', $data);
                         }
                         break;
@@ -276,6 +273,8 @@ class templater
                             //
                             $a = $eval(array_shift($param), 'id');
                             $items = $a[1];
+                        } else {
+                            $this->error('int: некорректное описание for');
                         }
                         if (is_array($items)){
                             $name = $items[1];
@@ -285,15 +284,15 @@ class templater
                             $key='_index';
                         }
                         if (!isset($this->scoups[$name])) {
-                            $data=['_data'=>[]];
+                            $data=['_data'=>[]
+                                ,'_index'=>1
+                                ,'_key'=>$key
+                                ,'_goback'=>$id
+                            ];
                             $data['_loop']=& $this->findByName($a[1]);
                             reset($data['_loop']);
                             $data['_data'][$name]=current($data['_loop']);
                             $data['_data'][$key]=key($data['_loop']);
-                            $data['_position']=[$pos,$posX];
-                            $data['_index']=1;
-                            $data['_key']=$key;
-                            $data['_goback']=$id;
                             $this->addScope($name, $data);
                         }
                         break;
@@ -312,7 +311,6 @@ class templater
                             $key=$scoup['_key'];
                             $scoup['_data'][$key]=key($scoup['_loop']);
                             $id=$scoup['_goback'];
-                            $this->_goto($scoup['_position'][0],$scoup['_position'][1]);
                         }
                         break;
                     case ';': // 2 параметра берем и делаем из них массив
@@ -395,12 +393,12 @@ class templater
                         }
                         break;
                     default:
-                        if(isset($this->ops_prio[$_op])){
+                        if(isset($this->ops_prio[$_op[1]])){
                             $a = array_shift($param);
                             $b = &$param[0];
                             $b = $eval($b);
                             $a = $eval($a);
-                            switch($_op) {
+                            switch($_op[1]) {
                                 case '-': $b[1] = $b[1]-$a[1]; break;
                                 case '+': $b[1] = $b[1]+$a[1]; break;
                                 case '/': $b[1] = $b[1]/$a[1]; break;
@@ -420,7 +418,7 @@ class templater
                                 $b = $param[0];
                                 if ($b[0] != 2) $b = [$b];
                                 else unset($b[0]);
-                                $param[0] = array_merge([2], $a, $b, [[0, $_op]]);
+                                $param[0] = array_merge([2], $a, $b, [[0, $_op[1]]]);
                             }
                         }
                 }
@@ -469,12 +467,13 @@ class templater
 
     private function pushop($operation, $prio=null)
     {
-        $this->conditions[] = [0, $operation, is_null($prio)?$this->ops_prio[$operation]:$prio];
+        $this->conditions[] =
+            [0, $operation, is_null($prio)?$this->ops_prio[$operation]:$prio, $this->_posx];
     }
 
     private function pushoperand($operand, $type)
     {
-        $this->conditions[] = [1, $operand, $type];
+        $this->conditions[] = [1, $operand, $type, $this->_posx];
     }
 
     /**
