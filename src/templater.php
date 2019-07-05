@@ -64,7 +64,11 @@ class templater
     function __construct(&$data = null, $class='', $handler = null)
     {
         $this->addScope('', ['_data' => &$data]);
-        if(!empty($class) && class_exists($class)) {
+        if(!empty($class)) {
+            $this->class=$class;
+        }
+        if(is_string($this->class) && class_exists($this->class)) {
+            $class=$this->class;
             $this->class=new $class($this);
         }
     }
