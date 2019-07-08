@@ -20,16 +20,27 @@ class templaterTest extends PHPUnit_Framework_TestCase
             'if 1<0 ; ~111; else ; ~222 ; endif'
         ));
     }
+*/
     public function test8()
     {
         $data=['hello'=>'just to say hello', 'item'=>[1,2,3,4,5]];
         $excel=[['for item','~item ','endfor']];
         $result=[];
+        $rows=[];
+        $max=0;
         $templater=new templater($data,'\Ksnk\phpExcelAddon\filterClass',
             function($reason, $param  //$val,$r,$c
-                    ) use (&$result){
+                    ) use (&$result, &$max, &$rows){
                 switch($reason){
                     case 'setvalue':
+                        $ri=$param[0].'.'.$param[3];
+                        if(!isset($rows[$ri])) $rows[$ri]=$max++;
+                        if(!isset($result[$rows[$ri]])) $result[$rows[$ri]]=[];
+                        if(!isset($result[$rows[$ri]][$param[1]])) {
+                            $result[$rows[$ri]][$param[1]] = $param[2];
+                        } else {
+                            $result[$rows[$ri]][$param[1]] .= $param[2];
+                        }
                         break;
                     case 'loop':
                         break;
@@ -40,9 +51,9 @@ class templaterTest extends PHPUnit_Framework_TestCase
         foreach($excel as $ri=>$row)foreach($row as $ci=>$cell){
             $templater->parce($cell,[$ri,$ci]);
         }
-        $this->assertEquals([['',1],['',2],['',3],['',4],['',5],],$result);
+        $this->assertEquals([[1=>1],[1=>2],[1=>3],[1=>4],[1=>5],],$result);
     }
-*/
+
 
     /**
      * 2 вложенных цикла
