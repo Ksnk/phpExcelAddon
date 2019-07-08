@@ -48,7 +48,9 @@ class templater
     ];
 
     var $mode='',
-        $skip=[];
+        $skip=[],
+        /** @var callable */
+        $handler=null;
 
     private
         /** набор лексем после парсинга */
@@ -71,6 +73,22 @@ class templater
             $class=$this->class;
             $this->class=new $class($this);
         }
+        $this->handler=$handler;
+    }
+
+    protected function event($event,$param, $addr){
+        if(is_null($this->handler)) return false;
+        $p=[];
+        foreach($this->scoups as $s){
+            if(isset($s['_data'])){
+                if(isset($s['_index']))
+                    $p[]=$s['_index'];
+            }
+        }
+        $addr[2]=implode('.',$p);
+        $addr[3]=$param;
+        return call_user_func($this->handler,$event,$addr);
+
     }
 
     private function addScope($name, $params = [])
@@ -385,7 +403,9 @@ class templater
                     case '~_u': // унарная операция
                         if (count($param) > 0) {
                             $a = $eval(array_shift($param));
-                            $echo_result .= $a[1];
+                            if(!$this->event('setvalue',$a[1],$_op[3])) {
+                                $echo_result .= $a[1];
+                            }
                         }
                         break;
                     case '-_u': // унарная операция
